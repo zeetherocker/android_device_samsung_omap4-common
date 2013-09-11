@@ -25,9 +25,7 @@
 #include <hardware/hardware.h>
 #include <hardware/power.h>
 
-#define CPUFREQ_INTERACTIVE "/sys/devices/system/cpu/cpufreq/interactive/"
 #define CPUFREQ_CPU0 "/sys/devices/system/cpu/cpu0/cpufreq/"
-#define BOOSTPULSE_PATH (CPUFREQ_INTERACTIVE "boostpulse")
 
 #define MAX_FREQ_NUMBER 10
 #define NOM_FREQ_INDEX 2
@@ -39,8 +37,6 @@ static char *max_freq, *nom_freq;
 struct omap_power_module {
     struct power_module base;
     pthread_mutex_t lock;
-    int boostpulse_fd;
-    int boostpulse_warned;
     int inited;
 };
 
@@ -131,35 +127,8 @@ static void omap_power_init(struct power_module *module) {
     tmp = (NOM_FREQ_INDEX > freq_num) ? freq_num : NOM_FREQ_INDEX;
     nom_freq = freq_list[tmp - 1];
 
-    sysfs_write(CPUFREQ_INTERACTIVE "timer_rate", "20000");
-    sysfs_write(CPUFREQ_INTERACTIVE "min_sample_time","60000");
-    sysfs_write(CPUFREQ_INTERACTIVE "hispeed_freq", nom_freq);
-    sysfs_write(CPUFREQ_INTERACTIVE "go_hispeed_load", "50");
-    sysfs_write(CPUFREQ_INTERACTIVE "above_hispeed_delay", "100000");
-
     ALOGI("Initialized successfully");
     omap_device->inited = 1;
-}
-
-static int boostpulse_open(struct omap_power_module *omap_device) {
-    char buf[80];
-
-    pthread_mutex_lock(&omap_device->lock);
-
-    if (omap_device->boostpulse_fd < 0) {
-        omap_device->boostpulse_fd = open(BOOSTPULSE_PATH, O_WRONLY);
-
-        if (omap_device->boostpulse_fd < 0) {
-            if (!omap_device->boostpulse_warned) {
-                strerror_r(errno, buf, sizeof(buf));
-                ALOGE("Error opening %s: %s\n", BOOSTPULSE_PATH, buf);
-                omap_device->boostpulse_warned = 1;
-            }
-        }
-    }
-
-    pthread_mutex_unlock(&omap_device->lock);
-    return omap_device->boostpulse_fd;
 }
 
 static void omap_power_set_interactive(struct power_module *module, int on) {
@@ -178,22 +147,12 @@ static void omap_power_set_interactive(struct power_module *module, int on) {
 
 static void omap_power_hint(struct power_module *module, power_hint_t hint, void *data) {
     struct omap_power_module *omap_device = (struct omap_power_module *) module;
-    char buf[80];
-    int len;
 
     if (!omap_device->inited)
         return;
 
     switch (hint) {
     case POWER_HINT_INTERACTION:
-        if (boostpulse_open(omap_device) >= 0) {
-            len = write(omap_device->boostpulse_fd, "1", 1);
-
-            if (len < 0) {
-                strerror_r(errno, buf, sizeof(buf));
-                ALOGE("Error writing to %s: %s\n", BOOSTPULSE_PATH, buf);
-            }
-        }
         break;
 
     case POWER_HINT_VSYNC:
@@ -226,6 +185,4 @@ struct omap_power_module HAL_MODULE_INFO_SYM = {
     },
 
     .lock = PTHREAD_MUTEX_INITIALIZER,
-    .boostpulse_fd = -1,
-    .boostpulse_warned = 0,
 };
