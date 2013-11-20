@@ -51,6 +51,7 @@ PRODUCT_PACKAGES += \
 PRODUCT_PROPERTY_OVERRIDES += \
     com.ti.omap_enhancement=true \
     omap.enhancement=true \
+    ro.bq.gpu_to_cpu_unsupported=1 \
     ro.telephony.ril_class=SamsungExynos4RIL \
     ro.telephony.call_ring.multiple=false \
     ro.telephony.call_ring.delay=3000
